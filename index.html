@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COMELEC Field Office Utility Hub</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuse.js for fuzzy search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- HTML5 QR Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        comelecBlue: '#002855',
+                        phBlue: '#0038A8',
+                        goldAccent: '#D4A017'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
+
+    <!-- Top Header & Connectivity Bar -->
+    <header class="bg-comelecBlue text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-goldAccent text-comelecBlue font-bold px-3 py-1 rounded shadow text-sm">HUB</div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight">Field & Office Utility Hub</h1>
+                    <p class="text-xs text-slate-300">Offline-Ready PWA / Web App</p>
+                </div>
+            </div>
+            
+            <!-- Connection & Sync Status -->
+            <div class="flex items-center gap-4 text-xs">
+                <span id="netStatus" class="px-2.5 py-1 rounded-full font-semibold bg-emerald-500 text-white">Online</span>
+                <span id="queueBadge" class="bg-amber-500 text-slate-900 px-2.5 py-1 rounded-full font-bold hidden">0 Pending Sync</span>
+                <button onclick="openConfigModal()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded transition text-white">⚙️ Settings</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="bg-white border-b border-slate-200 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 flex overflow-x-auto space-x-2 py-2 no-scrollbar">
+            <button onclick="switchTab('tab-barangay')" class="tab-btn px-4 py-2 rounded-lg font-medium text-sm transition bg-comelecBlue text-white whitespace-nowrap">📍 Barangay Directory</button>
+            <button onclick="switchTab('tab-memo')" class="tab-btn px-4 py-2 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-100 whitespace-nowrap">📋 Memo Tracker</button>
+            <button onclick="switchTab('tab-calculators')" class="tab-btn px-4 py-2 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-100 whitespace-nowrap">🧮 Age & Civil Degree</button>
+            <button onclick="switchTab('tab-registration')" class="tab-btn px-4 py-2 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-100 whitespace-nowrap">📝 Registration Tracker</button>
+            <button onclick="switchTab('tab-qr')" class="tab-btn px-4 py-2 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-100 whitespace-nowrap">📷 QR Tools</button>
+        </div>
+    </nav>
+
+    <!-- Content Container -->
+    <main class="max-w-6xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- 1. BARANGAY DIRECTORY TAB -->
+        <section id="tab-barangay" class="tab-content space-y-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-comelecBlue">Philippine Barangay Directory Search</h2>
+                    <button onclick="loadBarangaysData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-1.5 rounded transition">🔄 Refresh from Sheet</button>
+                </div>
+                <div class="relative">
+                    <input type="text" id="brgySearchInput" oninput="searchBarangays()" placeholder="Type Barangay name, municipality, or province (e.g. Tabango, Leyte)..." class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-phBlue text-sm">
+                    <span class="absolute left-3.5 top-3.5 text-slate-400">🔍</span>
+                </div>
+                <p id="brgyStatus" class="text-xs text-slate-500 mt-2">Loading local database...</p>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
+                            <tr>
+                                <th class="p-3">Barangay</th>
+                                <th class="p-3">Municipality / City</th>
+                                <th class="p-3">Province</th>
+                                <th class="p-3">Region</th>
+                            </tr>
+                        </thead>
+                        <tbody id="brgyResultsTable" class="divide-y divide-slate-200 text-sm">
+                            <tr><td colspan="4" class="p-4 text-center text-slate-400">Start typing above to search 42,000+ barangays instantly.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. MEMO TRACKER TAB -->
+        <section id="tab-memo" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
+                <h2 class="text-lg font-bold text-comelecBlue mb-4">Updatable Memo Tracker</h2>
+                <form id="memoForm" onsubmit="submitMemo(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Direction</label>
+                            <select id="memoDirection" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white">
+                                <option value="Received">Received Memo</option>
+                                <option value="Sent">Sent Memo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+                            <input type="date" id="memoDate" required class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Subject / Description</label>
+                        <textarea id="memoSubject" rows="3" required placeholder="Enter memo subject or summary..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Encoded By</label>
+                        <input type="text" id="memoEncoder" value="Election Officer" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <button type="submit" class="w-full bg-phBlue hover:bg-comelecBlue text-white font-semibold py-2.5 rounded-lg transition text-sm">Save & Auto-Generate Memo No.</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 3. AGE & CIVIL DEGREE CALCULATOR TAB -->
+        <section id="tab-calculators" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Age Calculator -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-comelecBlue mb-3">📅 Age Calculator</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Date of Birth</label>
+                            <input type="date" id="calcDob" onchange="calculateAge()" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">As Of Date (Default: Today)</label>
+                            <input type="date" id="calcAsOf" onchange="calculateAge()" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                        <div id="ageResultBox" class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm text-center font-medium text-comelecBlue">
+                            Select a birthdate to calculate exact age.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Relationship Degree Calculator -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-comelecBlue mb-3">⚖️ Relationship Degree Checker</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Relationship Type</label>
+                            <select id="relType" onchange="calculateRelationship()" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white">
+                                <option value="parent_child">Parent / Child (Direct Line)</option>
+                                <option value="grandparent_grandchild">Grandparent / Grandchild (Direct Line)</option>
+                                <option value="sibling">Siblings (Collateral)</option>
+                                <option value="aunt_uncle_niece_nephew">Aunt/Uncle & Niece/Nephew (Collateral)</option>
+                                <option value="first_cousin">First Cousins (Collateral)</option>
+                                <option value="spouse_blood">Parent-in-Law / Son/Daughter-in-Law (Affinity)</option>
+                            </select>
+                        </div>
+                        <div id="relResultBox" class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm">
+                            <span class="font-bold text-comelecBlue">Civil Degree:</span> 1st Civil Degree<br>
+                            <span class="text-xs text-slate-600">Direct line of consanguinity.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. REGISTRATION TRACKER TAB -->
+        <section id="tab-registration" class="tab-content hidden space-y-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 max-w-2xl mx-auto">
+                <h2 class="text-lg font-bold text-comelecBlue mb-4">Voter Registration Application Tracker</h2>
+                <form id="regForm" onsubmit="submitRegistration(event)" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Application No.</label>
+                            <input type="text" id="regAppNo" required placeholder="e.g. 2026-0001" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Application Type</label>
+                            <select id="regType" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white">
+                                <option value="New">New Registration</option>
+                                <option value="Transfer">Transfer of Registration</option>
+                                <option value="Correction">Correction of Entries</option>
+                                <option value="Reactivation">Reactivation</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Date of Registration</label>
+                            <input type="date" id="regDate" required class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Sex</label>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="setSex('Male')" id="sexMaleBtn" class="flex-1 py-2.5 border border-phBlue rounded-lg text-sm font-semibold bg-phBlue text-white transition">Male</button>
+                                <button type="button" onclick="setSex('Female')" id="sexFemaleBtn" class="flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition">Female</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Barangay</label>
+                            <input type="text" id="regBarangay" required placeholder="Enter or search Barangay..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Precinct No.</label>
+                            <input type="text" id="regPrecinct" placeholder="e.g. 0012A" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-phBlue hover:bg-comelecBlue text-white font-semibold py-2.5 rounded-lg transition text-sm">Save Registration Record</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 5. QR TOOLS TAB -->
+        <section id="tab-qr" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- QR Generator -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 text-center">
+                    <h3 class="font-bold text-comelecBlue mb-3">🏷️ Generate QR Code</h3>
+                    <input type="text" id="qrText" placeholder="Enter text, Application No., or URL..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm mb-3">
+                    <button onclick="generateQRCode()" class="bg-phBlue text-white px-4 py-2 rounded-lg text-sm font-semibold w-full mb-4">Generate</button>
+                    <div id="qrcode" class="flex justify-center p-2"></div>
+                </div>
+
+                <!-- QR Scanner -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-comelecBlue mb-3">📷 Scan QR Code</h3>
+                    <div id="reader" class="w-full rounded-lg overflow-hidden border border-slate-200"></div>
+                    <div id="scanResult" class="mt-3 p-3 bg-slate-50 rounded-lg text-sm font-medium text-comelecBlue text-center">
+                        Scan result will appear here.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="configModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 class="text-lg font-bold text-comelecBlue">App Settings & Backend URL</h3>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Google Apps Script Web App URL</label>
+                <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm">
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeConfigModal()" class="px-4 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+                <button onclick="saveConfig()" class="bg-phBlue text-white px-4 py-2 rounded-lg text-sm font-semibold">Save Config</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // State Management
+        let barangaysList = [];
+        let fuseInstance = null;
+        let selectedSex = 'Male';
+        let html5QrCode = null;
+
+        // Init on Load
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('memoDate').value = today;
+            document.getElementById('regDate').value = today;
+            document.getElementById('calcDob').value = '1995-01-01';
+            document.getElementById('calcAsOf').value = today;
+            calculateAge();
+
+            const savedUrl = localStorage.getItem('appsScriptUrl');
+            if (savedUrl) {
+                document.getElementById('apiUrlInput').value = savedUrl;
+            }
+
+            loadBarangaysData();
+            updateQueueStatus();
+            initScanner();
+            
+            window.addEventListener('online', () => {
+                document.getElementById('netStatus').innerText = "Online";
+                document.getElementById('netStatus').className = "px-2.5 py-1 rounded-full font-semibold bg-emerald-500 text-white";
+                syncOfflineQueue();
+            });
+            window.addEventListener('offline', () => {
+                document.getElementById('netStatus').innerText = "Offline";
+                document.getElementById('netStatus').className = "px-2.5 py-1 rounded-full font-semibold bg-rose-500 text-white";
+            });
+        };
+
+        // Tab Navigation
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-4 py-2 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-100 whitespace-nowrap";
+            });
+            event.currentTarget.className = "tab-btn px-4 py-2 rounded-lg font-medium text-sm transition bg-comelecBlue text-white whitespace-nowrap";
+        }
+
+        // Config Modal
+        function openConfigModal() { document.getElementById('configModal').classList.remove('hidden'); }
+        function closeConfigModal() { document.getElementById('configModal').classList.add('hidden'); }
+        function saveConfig() {
+            const url = document.getElementById('apiUrlInput').value.trim();
+            localStorage.setItem('appsScriptUrl', url);
+            closeConfigModal();
+            alert('Settings saved successfully!');
+            loadBarangaysData();
+        }
+
+        // 1. Barangay Directory & Search
+        function loadBarangaysData() {
+            const cached = localStorage.getItem('barangaysCache');
+            if (cached) {
+                barangaysList = JSON.parse(cached);
+                initFuse();
+                document.getElementById('brgyStatus').innerText = `Loaded ${barangaysList.length} barangays (Cached)`;
+            }
+
+            const apiUrl = localStorage.getItem('appsScriptUrl');
+            if (!apiUrl) return;
+
+            fetch(apiUrl + '?action=getBarangays')
+                .then(res => res.json())
+                .then(response => {
+                    if (response.status === 'success') {
+                        barangaysList = response.data;
+                        localStorage.setItem('barangaysCache', JSON.stringify(barangaysList));
+                        initFuse();
+                        document.getElementById('brgyStatus').innerText = `Loaded ${barangaysList.length} barangays from Google Sheet`;
+                    }
+                })
+                .catch(err => console.log('Using offline barangay cache:', err));
+        }
+
+        function initFuse() {
+            const options = {
+                keys: ['Barangay', 'Municipality', 'Province'],
+                threshold: 0.3
+            };
+            fuseInstance = new Fuse(barangaysList, options);
+        }
+
+        function searchBarangays() {
+            const query = document.getElementById('brgySearchInput').value.trim();
+            const tbody = document.getElementById('brgyResultsTable');
+            if (!query || query.length < 2) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Type at least 2 characters to search...</td></tr>`;
+                return;
+            }
+
+            if (!fuseInstance) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Barangay database still loading...</td></tr>`;
+                return;
+            }
+
+            const results = fuseInstance.search(query).slice(0, 10);
+            if (results.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">No matching barangays found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = results.map(r => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 font-medium text-slate-800">${r.item.Barangay || ''}</td>
+                    <td class="p-3 text-slate-600">${r.item.Municipality || ''}</td>
+                    <td class="p-3 text-slate-600">${r.item.Province || ''}</td>
+                    <td class="p-3 text-slate-600">${r.item.Region || ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 2. Memo Tracker Submission
+        function submitMemo(e) {
+            e.preventDefault();
+            const data = {
+                type: 'memo',
+                data: {
+                    direction: document.getElementById('memoDirection').value,
+                    memoDate: document.getElementById('memoDate').value,
+                    subject: document.getElementById('memoSubject').value,
+                    encodedBy: document.getElementById('memoEncoder').value
+                }
+            };
+            sendData(data, 'Memo saved successfully!');
+            document.getElementById('memoSubject').value = '';
+        }
+
+        // 3. Age & Relationship Calculations
+        function calculateAge() {
+            const dob = new Date(document.getElementById('calcDob').value);
+            const asOf = new Date(document.getElementById('calcAsOf').value);
+            if (isNaN(dob) || isNaN(asOf)) return;
+
+            let years = asOf.getFullYear() - dob.getFullYear();
+            let months = asOf.getMonth() - dob.getMonth();
+            let days = asOf.getDate() - dob.getDate();
+
+            if (days < 0) {
+                months--;
+                const prevMonth = new Date(asOf.getFullYear(), asOf.getMonth(), 0);
+                days += prevMonth.getDate();
+            }
+            if (months < 0) {
+                years--;
+                months += 12;
+            }
+
+            document.getElementById('ageResultBox').innerHTML = `Exact Age: <span class="font-bold text-phBlue">${years} years, ${months} months, and ${days} days</span>`;
+        }
+
+        function calculateRelationship() {
+            const type = document.getElementById('relType').value;
+            const mapping = {
+                'parent_child': { deg: '1st Civil Degree', desc: 'Direct line of consanguinity (Parent / Child).' },
+                'grandparent_grandchild': { deg: '2nd Civil Degree', desc: 'Direct line of consanguinity (Grandparent / Grandchild).' },
+                'sibling': { deg: '2nd Civil Degree', desc: 'Collateral line of consanguinity (Brothers / Sisters).' },
+                'aunt_uncle_niece_nephew': { deg: '3rd Civil Degree', desc: 'Collateral line of consanguinity (Aunt/Uncle & Niece/Nephew).' },
+                'first_cousin': { deg: '4th Civil Degree', desc: 'Collateral line of consanguinity (First Cousins).' },
+                'spouse_blood': { deg: '1st Civil Degree', desc: 'Direct line of affinity (Parents-in-law / Children-in-law).' }
+            };
+            const res = mapping[type];
+            document.getElementById('relResultBox').innerHTML = `<span class="font-bold text-comelecBlue">Civil Degree:</span> ${res.deg}<br><span class="text-xs text-slate-600">${res.desc}</span>`;
+        }
+
+        // 4. Registration Tracker Submission
+        function setSex(sex) {
+            selectedSex = sex;
+            if (sex === 'Male') {
+                document.getElementById('sexMaleBtn').className = "flex-1 py-2.5 border border-phBlue rounded-lg text-sm font-semibold bg-phBlue text-white transition";
+                document.getElementById('sexFemaleBtn').className = "flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition";
+            } else {
+                document.getElementById('sexFemaleBtn').className = "flex-1 py-2.5 border border-phBlue rounded-lg text-sm font-semibold bg-phBlue text-white transition";
+                document.getElementById('sexMaleBtn').className = "flex-1 py-2.5 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-100 transition";
+            }
+        }
+
+        function submitRegistration(e) {
+            e.preventDefault();
+            const data = {
+                type: 'registration',
+                data: {
+                    appNo: document.getElementById('regAppNo').value,
+                    appType: document.getElementById('regType').value,
+                    regDate: document.getElementById('regDate').value,
+                    sex: selectedSex,
+                    barangay: document.getElementById('regBarangay').value,
+                    precinctNo: document.getElementById('regPrecinct').value,
+                    status: 'Pending'
+                }
+            };
+            sendData(data, 'Registration record saved successfully!');
+            document.getElementById('regForm').reset();
+            document.getElementById('regDate').value = new Date().toISOString().split('T')[0];
+        }
+
+        // 5. QR Generator & Scanner
+        function generateQRCode() {
+            const text = document.getElementById('qrText').value;
+            const container = document.getElementById('qrcode');
+            container.innerHTML = '';
+            if (!text) return;
+            new QRCode(container, { text: text, width: 160, height: 160 });
+        }
+
+        function initScanner() {
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+                const config = { fps: 10, qrbox: { width: 200, height: 200 } };
+                html5QrCode.start({ facingMode: "environment" }, config, (decodedText) => {
+                    document.getElementById('scanResult').innerText = `Scanned: ${decodedText}`;
+                    document.getElementById('regAppNo').value = decodedText;
+                }).catch(err => {
+                    console.log("Camera not initialized:", err);
+                });
+            } catch (e) {
+                console.log("QR Scanner init error:", e);
+            }
+        }
+
+        // Offline Queue & Sync Engine
+        function sendData(payload, successMessage) {
+            const apiUrl = localStorage.getItem('appsScriptUrl');
+            if (!apiUrl || !navigator.onLine) {
+                queueOffline(payload);
+                alert('Device is offline or URL not set. Record saved to local queue and will sync automatically when online.');
+                return;
+            }
+
+            fetch(apiUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                alert(successMessage);
+            })
+            .catch(() => {
+                queueOffline(payload);
+                alert('Network error. Saved to offline queue.');
+            });
+        }
+
+        function queueOffline(payload) {
+            let queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+            queue.push(payload);
+            localStorage.setItem('offlineQueue', JSON.stringify(queue));
+            updateQueueStatus();
+        }
+
+        function updateQueueStatus() {
+            const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+            const badge = document.getElementById('queueBadge');
+            if (queue.length > 0) {
+                badge.innerText = `${queue.length} Pending Sync`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function syncOfflineQueue() {
+            const apiUrl = localStorage.getItem('appsScriptUrl');
+            let queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+            if (!apiUrl || queue.length === 0) return;
+
+            const item = queue.shift();
+            fetch(apiUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+            })
+            .then(() => {
+                localStorage.setItem('offlineQueue', JSON.stringify(queue));
+                updateQueueStatus();
+                if (queue.length > 0) syncOfflineQueue();
+            })
+            .catch(err => console.log('Sync retry failed:', err));
+        }
+    </script>
+</body>
+</html>
